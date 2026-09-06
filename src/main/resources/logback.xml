@@ -1,0 +1,42 @@
+<configuration>
+    <!-- Keeps the JUL->SLF4J bridge cheap by propagating Logback levels to JUL. -->
+    <contextListener class="ch.qos.logback.classic.jul.LevelChangePropagator">
+        <resetJUL>true</resetJUL>
+    </contextListener>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- Suppresses the idle long-poll timeout tgbotapi logs every ~20s. -->
+        <filter class="logging.PollTimeoutFilter"/>
+
+        <encoder>
+            <!--
+              Defence in depth: Ktor puts the full request URL into its exception
+              messages, and for Telegram that URL embeds the bot token. %replace
+              scrubs it from the message and the stack trace alike, so a library we
+              do not control cannot leak the token into the log.
+            -->
+            <pattern>%replace(%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n%ex){'bot\d{6,}:[A-Za-z0-9_-]{20,}', 'bot&lt;REDACTED&gt;'}</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+    <!-- These log full HTTP traffic at DEBUG, which would include API keys. -->
+    <logger name="io.ktor" level="INFO"/>
+    <logger name="dev.inmo" level="INFO"/>
+    <logger name="ai.koog" level="INFO"/>
+    <logger name="org.apache.hc" level="WARN"/>
+    <!-- tgbotapi's internal logger, arriving via the JUL bridge. -->
+    <logger name="KSLog" level="WARN"/>
+    <!--
+      Koog's Ollama converter warns "Skipping unsupported message part" for every
+      tool result it sees, because it collects text parts and tool results in two
+      separate passes and only the first one recognises them. The results are in
+      fact sent, as role="tool" messages, immediately afterwards — so the warning
+      is noise. It is worth silencing rather than tolerating: it repeats for every
+      result in the history on every step of every run, which buries real problems.
+    -->
+    <logger name="ai.koog.prompt.executor.ollama.client.dto.OllamaConverters" level="ERROR"/>
+</configuration>
